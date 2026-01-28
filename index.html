@@ -1,28 +1,119 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zyrax Chat</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Inter', sans-serif; background: #0a0a0a; color: #fff; display: flex; justify-content: center; height: 100vh; }
+        
+        .container { width: 100%; max-width: 600px; display: flex; flex-direction: column; background: #111; border-left: 1px solid #222; border-right: 1px solid #222; }
+        
+        header { padding: 15px 20px; background: #1a1a1a; border-bottom: 1px solid #222; display: flex; justify-content: space-between; align-items: center; }
+        #status { font-size: 12px; color: #4caf50; }
+
+        #chat-window { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 12px; scroll-behavior: smooth; }
+        
+        .msg-row { display: flex; flex-direction: column; max-width: 80%; }
+        .msg-row.me { align-self: flex-end; align-items: flex-end; }
+        .msg-row.them { align-self: flex-start; align-items: flex-start; }
+
+        .bubble { padding: 10px 16px; border-radius: 18px; font-size: 14px; line-height: 1.5; word-wrap: break-word; }
+        .me .bubble { background: #0070f3; color: white; border-bottom-right-radius: 4px; }
+        .them .bubble { background: #222; color: #eee; border-bottom-left-radius: 4px; }
+
+        .meta { font-size: 10px; color: #666; margin-bottom: 4px; }
+
+        .input-area { padding: 20px; background: #161616; border-top: 1px solid #222; display: flex; gap: 10px; }
+        input { background: #222; border: 1px solid #333; color: white; padding: 12px; border-radius: 8px; outline: none; transition: border 0.2s; }
+        input:focus { border-color: #0070f3; }
+        #nameInput { width: 80px; text-align: center; }
+        #msgInput { flex: 1; }
+        button { background: #0070f3; color: white; border: none; padding: 0 20px; border-radius: 8px; font-weight: 600; cursor: pointer; }
+        button:hover { background: #005bc5; }
+    </style>
+</head>
 <body>
-    <div id="chatbox" style="height:300px; border:1px solid #ccc; overflow-y:scroll;"></div>
-    <input type="text" id="userMsg" placeholder="Type here...">
-    <button onclick="sendToWorker()">Send</button>
 
-    <script>
-        async function sendToWorker() {
-            const input = document.getElementById('userMsg');
-            const workerUrl = "https://website-proxy-background.imcrabfr.workers.dev";
+<div class="container">
+    <header>
+        <span>Zyrax Chat</span>
+        <span id="status">● Online</span>
+    </header>
+    
+    <div id="chat-window"></div>
 
-            const response = await fetch(workerUrl, {
-                method: "POST",
-                body: JSON.stringify({ text: input.value }),
-                headers: { "Content-Type": "application/json" }
-            });
+    <div class="input-area">
+        <input type="text" id="nameInput" placeholder="Name" value="Zyrax">
+        <input type="text" id="msgInput" placeholder="Message..." autocomplete="off">
+        <button id="sendBtn">Send</button>
+    </div>
+</div>
 
-            const result = await response.json();
+<script>
+    const WORKER_URL = "https://website-proxy-background.imcrabfr.workers.dev";
+    const chatWindow = document.getElementById('chat-window');
+    const msgInput = document.getElementById('msgInput');
+    const nameInput = document.getElementById('nameInput');
+    const sendBtn = document.getElementById('sendBtn');
+
+    // Function to fetch and display messages
+    async function fetchMessages() {
+        try {
+            const response = await fetch(WORKER_URL);
+            if (!response.ok) throw new Error();
+            const messages = await response.json();
             
-            // Add to screen
-            const box = document.getElementById('chatbox');
-            box.innerHTML += `<p><b>You:</b> ${input.value}</p>`;
-            input.value = "";
+            const currentName = nameInput.value || "Guest";
+            
+            chatWindow.innerHTML = messages.map(m => `
+                <div class="msg-row ${m.user === currentName ? 'me' : 'them'}">
+                    <span class="meta">${m.user} • ${m.time}</span>
+                    <div class="bubble">${m.text}</div>
+                </div>
+            `).join('');
+            
+            // Auto-scroll to bottom
+            chatWindow.scrollTop = chatWindow.scrollHeight;
+            document.getElementById('status').innerText = "● Online";
+            document.getElementById('status').style.color = "#4caf50";
+        } catch (err) {
+            document.getElementById('status').innerText = "● Connecting...";
+            document.getElementById('status').style.color = "#ff9800";
         }
-    </script>
+    }
+
+    // Function to send a message
+    async function sendMessage() {
+        const text = msgInput.value.trim();
+        const user = nameInput.value.trim() || "Guest";
+
+        if (!text) return;
+
+        // Clear input immediately for better UX
+        msgInput.value = '';
+
+        try {
+            await fetch(WORKER_URL, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ user, text })
+            });
+            fetchMessages(); // Refresh chat immediately
+        } catch (err) {
+            alert("Failed to send message. Check connection.");
+        }
+    }
+
+    // Event Listeners
+    sendBtn.onclick = sendMessage;
+    msgInput.onkeypress = (e) => { if (e.key === 'Enter') sendMessage(); };
+
+    // Update every 2 seconds
+    setInterval(fetchMessages, 2000);
+    fetchMessages(); // Initial load
+</script>
+
 </body>
 </html>
